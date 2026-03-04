@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { usePoints } from '../context/usePoints'
+import { useProfiles } from '../context/useProfiles'
 
 const POINTS_NO_PHOTO = 2
 const POINTS_WITH_PHOTO = 5
@@ -11,6 +12,7 @@ export function DrinkPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
   const { total, events, loading: pointsLoading } = usePoints()
+  const { nameOf } = useProfiles()
   const userId = session!.user.id
 
   const [photo, setPhoto] = useState<File | null>(null)
@@ -189,11 +191,11 @@ export function DrinkPage() {
                     <span className="text-2xl shrink-0">🍺</span>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-300">
-                      {e.type === 'drink_with_photo' ? 'Drack med bild' : 'Drack en öl'}
+                    <p className="text-sm text-gray-300 font-medium truncate">
+                      {nameOf(e.user_id)}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {new Date(e.created_at).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
+                      {e.type === 'drink_with_photo' ? 'med bild · ' : ''}{new Date(e.created_at).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                   <span className="text-sm font-bold text-amber-400">+{e.points}p</span>

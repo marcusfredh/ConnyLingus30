@@ -1,17 +1,19 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { usePoints } from '../context/usePoints'
+import { useProfiles } from '../context/useProfiles'
 
 const POINT_TYPE_LABELS: Record<string, string> = {
   beer_tasting_complete: 'Ölprovning klar',
-  drink: 'Drack en öl',
-  drink_with_photo: 'Drack med bild',
+  drink: 'drack en öl',
+  drink_with_photo: 'drack med bild',
 }
 
 export function HomePage() {
   const { session, signOut } = useAuth()
   const navigate = useNavigate()
   const { total, events, loading: pointsLoading } = usePoints()
+  const { nameOf } = useProfiles()
 
   const recentEvents = events.slice(0, 5)
 
@@ -48,11 +50,13 @@ export function HomePage() {
           {recentEvents.length > 0 && (
             <div className="mt-4 space-y-1.5">
               {recentEvents.map((e) => (
-                <div key={e.id} className="flex items-center justify-between text-xs">
+                <div key={e.id} className="flex items-center justify-between text-xs gap-2">
                   <span className="text-amber-200/70 truncate">
-                    {POINT_TYPE_LABELS[e.type] ?? e.type}
+                    {e.type === 'beer_tasting_complete'
+                      ? POINT_TYPE_LABELS[e.type]
+                      : `${nameOf(e.user_id)} ${POINT_TYPE_LABELS[e.type] ?? e.type}`}
                   </span>
-                  <span className="text-amber-400 font-semibold ml-2 shrink-0">+{e.points}p</span>
+                  <span className="text-amber-400 font-semibold shrink-0">+{e.points}p</span>
                 </div>
               ))}
             </div>
@@ -76,8 +80,20 @@ export function HomePage() {
           </button>
 
           <button
-            onClick={() => navigate('/beers')}
+            onClick={() => navigate('/photos')}
             className="w-full bg-gray-800 border border-gray-700 shadow-sm rounded-2xl px-5 py-4 flex items-center gap-4 active:bg-gray-700 transition"
+          >
+            <span className="text-3xl">📸</span>
+            <div className="text-left">
+              <p className="font-semibold text-gray-50">Bilder</p>
+              <p className="text-sm text-gray-400">Uppladdade drinkbilder</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-500 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          <button
           >
             <span className="text-3xl">🏅</span>
             <div className="text-left">

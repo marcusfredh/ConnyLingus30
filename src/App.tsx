@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage'
 import { BeerRatingPage } from './pages/BeerRatingPage'
 import { SchedulePage } from './pages/SchedulePage'
 import { DrinkPage } from './pages/DrinkPage'
+import { PhotosPage } from './pages/PhotosPage'
 
 function App() {
   return (
@@ -42,6 +43,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <DrinkPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/photos"
+            element={
+              <ProtectedRoute>
+                <PhotosPage />
               </ProtectedRoute>
             }
           />
