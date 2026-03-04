@@ -10,7 +10,7 @@ import { PhotosPage } from './pages/PhotosPage'
 
 function App() {
   return (
-    <BrowserRouter basename="/ConnyLingus30">
+    <BrowserRouter>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
