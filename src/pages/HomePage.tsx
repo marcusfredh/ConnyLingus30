@@ -94,6 +94,8 @@ export function HomePage() {
           </button>
 
           <button
+            onClick={() => navigate('/beers')}
+            className="w-full bg-gray-800 border border-gray-700 shadow-sm rounded-2xl px-5 py-4 flex items-center gap-4 active:bg-gray-700 transition"
           >
             <span className="text-3xl">🏅</span>
             <div className="text-left">
