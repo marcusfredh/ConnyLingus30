@@ -23,7 +23,7 @@ export function HomePage() {
       {/* Top bar */}
       <header className="flex items-center justify-between py-4">
         <p className="text-sm text-gray-400 truncate max-w-[70%]">
-          {session?.user.email}
+          {session?.user.email?.split('@')[0]}
         </p>
         <button
           onClick={signOut}
