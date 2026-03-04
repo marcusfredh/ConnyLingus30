@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import { useAdmin } from '../context/useAdmin'
 
 const BEERS = Array.from({ length: 5 }, (_, i) => i + 1)
+const TOTAL_PLAYERS = 6
+const TASTING_POINTS = 50
 
 interface BeerRating {
   beer_number: number
@@ -193,6 +195,29 @@ export function BeerRatingPage() {
         allRatingsRef.current = [...allRatingsRef.current, { beer_number: beerNumber, rating, user_id: userId }]
       }
       setAverages(computeAverages(allRatingsRef.current))
+
+      // Check if all TOTAL_PLAYERS have rated all BEERS — if so, award tasting points once.
+      // Count unique (user_id, beer_number) pairs.
+      const uniquePairs = new Set(allRatingsRef.current.map((r) => `${r.user_id}|${r.beer_number}`))
+      const allDone = uniquePairs.size >= TOTAL_PLAYERS * BEERS.length
+
+      if (allDone) {
+        // Only insert if no beer_tasting_complete event exists yet.
+        const { data: existing_event } = await supabase
+          .from('point_events')
+          .select('id')
+          .eq('type', 'beer_tasting_complete')
+          .maybeSingle()
+
+        if (!existing_event) {
+          await supabase.from('point_events').insert({
+            type: 'beer_tasting_complete',
+            points: TASTING_POINTS,
+            user_id: userId,
+            metadata: null,
+          })
+        }
+      }
     }
 
     setSaving((s) => ({ ...s, [beerNumber]: false }))

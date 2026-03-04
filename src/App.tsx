@@ -5,6 +5,7 @@ import { LoginPage } from './pages/LoginPage'
 import { HomePage } from './pages/HomePage'
 import { BeerRatingPage } from './pages/BeerRatingPage'
 import { SchedulePage } from './pages/SchedulePage'
+import { DrinkPage } from './pages/DrinkPage'
 
 function App() {
   return (
@@ -33,6 +34,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <SchedulePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/drinks"
+            element={
+              <ProtectedRoute>
+                <DrinkPage />
               </ProtectedRoute>
             }
           />
