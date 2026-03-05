@@ -7,6 +7,7 @@ import { BeerRatingPage } from './pages/BeerRatingPage'
 import { SchedulePage } from './pages/SchedulePage'
 import { DrinkPage } from './pages/DrinkPage'
 import { PhotosPage } from './pages/PhotosPage'
+import { BarsPage } from './pages/BarsPage'
 
 function App() {
   return (
@@ -51,6 +52,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <PhotosPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/bars"
+            element={
+              <ProtectedRoute>
+                <BarsPage />
               </ProtectedRoute>
             }
           />
