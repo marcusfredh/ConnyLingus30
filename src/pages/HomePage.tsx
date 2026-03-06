@@ -120,6 +120,20 @@ export function HomePage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </button>
+
+          <button
+            onClick={() => navigate('/bars')}
+            className="w-full bg-gray-800 border border-gray-700 shadow-sm rounded-2xl px-5 py-4 flex items-center gap-4 active:bg-gray-700 transition"
+          >
+            <span className="text-3xl">🍻</span>
+            <div className="text-left">
+              <p className="font-semibold text-gray-50">Barer i Göteborg</p>
+              <p className="text-sm text-gray-400">Hitta ställen & rösta</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-500 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
       </main>
 
