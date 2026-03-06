@@ -1,7 +1,15 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
 import { usePoints } from '../context/usePoints'
 import { useProfiles } from '../context/useProfiles'
+import { useAdmin } from '../context/useAdmin'
+
+interface TeamMeta {
+  id: number
+  name: string
+}
 
 const POINT_TYPE_LABELS: Record<string, string> = {
   beer_tasting_complete: 'Ölprovning klar',
@@ -12,10 +20,47 @@ const POINT_TYPE_LABELS: Record<string, string> = {
 export function HomePage() {
   const { session, signOut } = useAuth()
   const navigate = useNavigate()
-  const { total, events, loading: pointsLoading } = usePoints()
+  const { teamTotals = {}, events = [], loading: pointsLoading } = usePoints()
   const { nameOf } = useProfiles()
+  const { isAdmin } = useAdmin()
+
+  const [teams, setTeams] = useState<TeamMeta[]>([])
+  const [teamsAssigned, setTeamsAssigned] = useState(false)
+  const [teamsLoading, setTeamsLoading] = useState(true)
+
+  useEffect(() => {
+    if (!session) return
+
+    async function load() {
+      const [{ data: tData }, { data: pData }] = await Promise.all([
+        supabase.from('teams').select('id, name').order('id'),
+        supabase.from('profiles').select('team_id').limit(10),
+      ])
+      setTeams((tData ?? []) as TeamMeta[])
+      setTeamsAssigned((pData ?? []).some((p) => p.team_id != null))
+      setTeamsLoading(false)
+    }
+
+    load()
+
+    const channel = supabase
+      .channel('homepage_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, async () => {
+        const { data } = await supabase.from('teams').select('id, name').order('id')
+        setTeams((data ?? []) as TeamMeta[])
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, async () => {
+        const { data } = await supabase.from('profiles').select('team_id').limit(10)
+        setTeamsAssigned((data ?? []).some((p) => p.team_id != null))
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [session])
 
   const recentEvents = events.slice(0, 5)
+  const isLoading = pointsLoading || teamsLoading
+  const showTeams = !isLoading && teamsAssigned && teams.length > 0
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col px-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
@@ -40,28 +85,51 @@ export function HomePage() {
           Martin 30 år!
         </h1>
 
-        {/* Team points card */}
-        <div className="w-full max-w-sm bg-gradient-to-br from-amber-900/40 to-amber-800/20 border border-amber-700/50 rounded-2xl px-5 py-5">
-          <p className="text-xs font-semibold text-amber-500 uppercase tracking-widest mb-1">Lagets poäng</p>
-          <p className="text-5xl font-black text-amber-400 tabular-nums">
-            {pointsLoading ? '…' : total}
-          </p>
-          {/* Recent activity */}
-          {recentEvents.length > 0 && (
-            <div className="mt-4 space-y-1.5">
-              {recentEvents.map((e) => (
-                <div key={e.id} className="flex items-center justify-between text-xs gap-2">
-                  <span className="text-amber-200/70 truncate">
-                    {e.type === 'beer_tasting_complete'
-                      ? POINT_TYPE_LABELS[e.type]
-                      : `${nameOf(e.user_id)} ${POINT_TYPE_LABELS[e.type] ?? e.type}`}
-                  </span>
-                  <span className="text-amber-400 font-semibold shrink-0">+{e.points}p</span>
-                </div>
-              ))}
+        {/* Team score cards — only shown after admin has assigned teams */}
+        {showTeams && (
+          <div className="w-full max-w-sm space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              {teams.map((team) => {
+                const pts = teamTotals[team.id] ?? 0
+                const isTeam1 = team.id === 1
+                return (
+                  <div
+                    key={team.id}
+                    className={`rounded-2xl px-4 py-4 border ${
+                      isTeam1
+                        ? 'bg-gradient-to-br from-indigo-900/40 to-indigo-800/10 border-indigo-700/50'
+                        : 'bg-gradient-to-br from-rose-900/40 to-rose-800/10 border-rose-700/50'
+                    }`}
+                  >
+                    <p className={`text-xs font-semibold uppercase tracking-widest mb-1 truncate ${isTeam1 ? 'text-indigo-400' : 'text-rose-400'}`}>
+                      {team.name}
+                    </p>
+                    <p className={`text-4xl font-black tabular-nums ${isTeam1 ? 'text-indigo-300' : 'text-rose-300'}`}>
+                      {pts}
+                    </p>
+                    <p className={`text-xs font-normal ${isTeam1 ? 'text-indigo-500' : 'text-rose-500'}`}>poäng</p>
+                  </div>
+                )
+              })}
             </div>
-          )}
-        </div>
+
+            {/* Activity feed */}
+            {recentEvents.length > 0 && (
+              <div className="bg-gray-900/60 border border-gray-800 rounded-2xl px-4 py-3 space-y-1.5">
+                {recentEvents.map((e) => (
+                  <div key={e.id} className="flex items-center justify-between text-xs gap-2">
+                    <span className="text-gray-400 truncate">
+                      {e.type === 'beer_tasting_complete'
+                        ? POINT_TYPE_LABELS[e.type]
+                        : `${nameOf(e.user_id)} ${POINT_TYPE_LABELS[e.type] ?? e.type}`}
+                    </span>
+                    <span className="text-amber-400 font-semibold shrink-0">+{e.points}p</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Navigation cards */}
         <div className="w-full max-w-sm space-y-3">
@@ -73,6 +141,20 @@ export function HomePage() {
             <div className="text-left">
               <p className="font-semibold text-gray-50">Dricka</p>
               <p className="text-sm text-gray-400">Registrera en enhet · 2–5p</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-500 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          <button
+            onClick={() => navigate('/leaderboard')}
+            className="w-full bg-gray-800 border border-gray-700 shadow-sm rounded-2xl px-5 py-4 flex items-center gap-4 active:bg-gray-700 transition"
+          >
+            <span className="text-3xl">🏆</span>
+            <div className="text-left">
+              <p className="font-semibold text-gray-50">Topplista</p>
+              <p className="text-sm text-gray-400">Individuella poäng &amp; lag</p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-500 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -108,6 +190,20 @@ export function HomePage() {
           </button>
 
           <button
+            onClick={() => navigate('/bars')}
+            className="w-full bg-gray-800 border border-gray-700 shadow-sm rounded-2xl px-5 py-4 flex items-center gap-4 active:bg-gray-700 transition"
+          >
+            <span className="text-3xl">🍻</span>
+            <div className="text-left">
+              <p className="font-semibold text-gray-50">Barer i Göteborg</p>
+              <p className="text-sm text-gray-400">Hitta ställen &amp; rösta</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-500 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          <button
             onClick={() => navigate('/schedule')}
             className="w-full bg-gray-800 border border-gray-700 shadow-sm rounded-2xl px-5 py-4 flex items-center gap-4 active:bg-gray-700 transition"
           >
@@ -121,19 +217,22 @@ export function HomePage() {
             </svg>
           </button>
 
-          <button
-            onClick={() => navigate('/bars')}
-            className="w-full bg-gray-800 border border-gray-700 shadow-sm rounded-2xl px-5 py-4 flex items-center gap-4 active:bg-gray-700 transition"
-          >
-            <span className="text-3xl">🍻</span>
-            <div className="text-left">
-              <p className="font-semibold text-gray-50">Barer i Göteborg</p>
-              <p className="text-sm text-gray-400">Hitta ställen & rösta</p>
-            </div>
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-500 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+          {/* Admin link — only visible to admins */}
+          {isAdmin && (
+            <button
+              onClick={() => navigate('/admin')}
+              className="w-full bg-gray-800 border border-gray-700 shadow-sm rounded-2xl px-5 py-4 flex items-center gap-4 active:bg-gray-700 transition"
+            >
+              <span className="text-3xl">⚙️</span>
+              <div className="text-left">
+                <p className="font-semibold text-gray-50">Admin</p>
+                <p className="text-sm text-gray-400">Tilldela lag</p>
+              </div>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-gray-500 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
         </div>
       </main>
 

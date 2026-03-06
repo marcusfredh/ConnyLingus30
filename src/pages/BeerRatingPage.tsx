@@ -196,20 +196,21 @@ export function BeerRatingPage() {
       }
       setAverages(computeAverages(allRatingsRef.current))
 
-      // Check if all TOTAL_PLAYERS have rated all BEERS — if so, award tasting points once.
-      // Count unique (user_id, beer_number) pairs.
+      // Check if all TOTAL_PLAYERS have rated all BEERS — if so, award tasting points
+      // to each individual user (50p each), but only once per user.
       const uniquePairs = new Set(allRatingsRef.current.map((r) => `${r.user_id}|${r.beer_number}`))
       const allDone = uniquePairs.size >= TOTAL_PLAYERS * BEERS.length
 
       if (allDone) {
-        // Only insert if no beer_tasting_complete event exists yet.
-        const { data: existing_event } = await supabase
+        // Only insert for this user if they haven't received the bonus yet.
+        const { data: myEvent } = await supabase
           .from('point_events')
           .select('id')
           .eq('type', 'beer_tasting_complete')
+          .eq('user_id', userId)
           .maybeSingle()
 
-        if (!existing_event) {
+        if (!myEvent) {
           await supabase.from('point_events').insert({
             type: 'beer_tasting_complete',
             points: TASTING_POINTS,

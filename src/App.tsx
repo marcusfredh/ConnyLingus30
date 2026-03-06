@@ -8,6 +8,8 @@ import { SchedulePage } from './pages/SchedulePage'
 import { DrinkPage } from './pages/DrinkPage'
 import { PhotosPage } from './pages/PhotosPage'
 import { BarsPage } from './pages/BarsPage'
+import { AdminPage } from './pages/AdminPage'
+import { LeaderboardPage } from './pages/LeaderboardPage'
 
 function App() {
   return (
@@ -60,6 +62,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <BarsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/leaderboard"
+            element={
+              <ProtectedRoute>
+                <LeaderboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminPage />
               </ProtectedRoute>
             }
           />
