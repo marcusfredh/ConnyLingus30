@@ -143,7 +143,7 @@ export function HomePage() {
             { icon: '📸', label: 'Bilder', sub: 'Drinkbilder', path: '/photos' },
             { icon: '🏅', label: 'Ölprovning', sub: 'Spike Brewery', path: '/beers' },
             { icon: '🍻', label: 'Barer', sub: 'Hitta ställen & rösta', path: '/bars' },
-            { icon: '📅', label: 'Schema', sub: '28–29 mars', path: '/schedule' },
+            ...(isAdmin ? [{ icon: '📅', label: 'Schema', sub: '28–29 mars', path: '/schedule' }] : []),
             ...(isAdmin ? [{ icon: '⚙️', label: 'Admin', sub: 'Tilldela lag', path: '/admin' }] : []),
           ].map(({ icon, label, sub, path }) => (
             <button

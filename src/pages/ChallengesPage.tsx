@@ -12,7 +12,7 @@ interface Challenge {
 interface Completion {
   id: number
   challenge_id: number
-  team_id: number
+  team_id: number | null
   completed_by: string
 }
 
@@ -64,12 +64,12 @@ export function ChallengesPage() {
   }, [session])
 
   const handleComplete = async (challenge: Challenge) => {
-    if (!session || myTeamId == null) return
+    if (!session) return
     setCompleting(challenge.id)
 
     const { error: insertError } = await supabase
       .from('challenge_completions')
-      .insert({ challenge_id: challenge.id, team_id: myTeamId, completed_by: session.user.id })
+      .insert({ challenge_id: challenge.id, team_id: myTeamId ?? null, completed_by: session.user.id })
 
     if (!insertError) {
       await supabase.from('point_events').insert({
@@ -80,7 +80,7 @@ export function ChallengesPage() {
       })
       setCompletions((prev) => [
         ...prev,
-        { id: Date.now(), challenge_id: challenge.id, team_id: myTeamId, completed_by: session.user.id },
+        { id: Date.now(), challenge_id: challenge.id, team_id: myTeamId ?? null, completed_by: session.user.id },
       ])
     }
 
@@ -95,12 +95,14 @@ export function ChallengesPage() {
     )
   }
 
-  const teamDoneIds = new Set(
-    completions.filter((c) => c.team_id === myTeamId).map((c) => c.challenge_id)
+  const myDoneIds = new Set(
+    myTeamId != null
+      ? completions.filter((c) => c.team_id === myTeamId).map((c) => c.challenge_id)
+      : completions.filter((c) => c.completed_by === session?.user.id).map((c) => c.challenge_id)
   )
 
-  const pending = challenges.filter((c) => !teamDoneIds.has(c.id))
-  const done = challenges.filter((c) => teamDoneIds.has(c.id))
+  const pending = challenges.filter((c) => !myDoneIds.has(c.id))
+  const done = challenges.filter((c) => myDoneIds.has(c.id))
   const totalPoints = done.reduce((sum, c) => sum + c.points, 0)
 
   return (
@@ -133,23 +135,15 @@ export function ChallengesPage() {
           </div>
         )}
 
-        {myTeamId == null && challenges.length > 0 && (
-          <div className="bg-amber-900/30 border border-amber-700/50 rounded-2xl px-4 py-3">
-            <p className="text-sm text-amber-300">Du är inte tilldelad ett lag ännu. Utmaningar låses upp när lag har tilldelats.</p>
-          </div>
-        )}
-
         {/* Pending challenges */}
         {pending.length > 0 && (
           <section className="space-y-3">
-            {myTeamId != null && (
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1">
-                Att göra · {pending.length}
-              </h2>
-            )}
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1">
+              Att göra · {pending.length}
+            </h2>
             {pending.map((c) => {
               const allCompletions = completions.filter((comp) => comp.challenge_id === c.id)
-              const otherTeamDone = allCompletions.some((comp) => comp.team_id !== myTeamId)
+              const otherTeamDone = myTeamId != null && allCompletions.some((comp) => comp.team_id != null && comp.team_id !== myTeamId)
 
               return (
                 <div
@@ -167,20 +161,18 @@ export function ChallengesPage() {
                       )}
                     </div>
                   </div>
-                  {myTeamId != null && (
-                    <button
-                      onClick={() => handleComplete(c)}
-                      disabled={completing === c.id}
-                      className="flex-shrink-0 bg-amber-600 active:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl px-3 py-2 transition"
-                    >
-                      {completing === c.id ? (
-                        <svg className="w-4 h-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                        </svg>
-                      ) : 'Klar!'}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleComplete(c)}
+                    disabled={completing === c.id}
+                    className="flex-shrink-0 bg-amber-600 active:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl px-3 py-2 transition"
+                  >
+                    {completing === c.id ? (
+                      <svg className="w-4 h-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                      </svg>
+                    ) : 'Klar!'}
+                  </button>
                 </div>
               )
             })}
@@ -193,32 +185,27 @@ export function ChallengesPage() {
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1">
               Klara · {done.length}
             </h2>
-            {done.map((c) => {
-              const comp = completions.find((co) => co.challenge_id === c.id && co.team_id === myTeamId)
-              return (
-                <div
-                  key={c.id}
-                  className="bg-gray-800/50 border border-gray-700/50 rounded-2xl px-4 py-4 flex items-start gap-4 opacity-70"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-300 leading-snug line-through decoration-gray-600">{c.text}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs font-semibold text-green-400 bg-green-900/40 px-2 py-0.5 rounded-full">
-                        +{c.points} p
-                      </span>
-                      {comp && (
-                        <span className="text-xs text-gray-500">Avklarad</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-900/50 border border-green-700/50 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
+            {done.map((c) => (
+              <div
+                key={c.id}
+                className="bg-gray-800/50 border border-gray-700/50 rounded-2xl px-4 py-4 flex items-start gap-4 opacity-70"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-300 leading-snug line-through decoration-gray-600">{c.text}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-xs font-semibold text-green-400 bg-green-900/40 px-2 py-0.5 rounded-full">
+                      +{c.points} p
+                    </span>
+                    <span className="text-xs text-gray-500">Avklarad</span>
                   </div>
                 </div>
-              )
-            })}
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-900/50 border border-green-700/50 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+            ))}
           </section>
         )}
 
