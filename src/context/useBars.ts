@@ -12,29 +12,52 @@ export interface Bar {
   type: 'bar' | 'pub' | 'nightclub' | 'biergarten'
 }
 
-// Gothenburg bounding box (roughly city center + surrounding areas)
-const GOTHENBURG_BBOX = {
-  south: 57.65,
-  west: 11.85,
-  north: 57.75,
-  east: 12.05,
+export interface UserLocation {
+  lat: number
+  lng: number
 }
+
+// Gothenburg center (fallback when no user location)
+const GOTHENBURG_CENTER = {
+  lat: 57.7089,
+  lng: 11.9746,
+}
+
+// Default radius in km
+const DEFAULT_RADIUS_KM = 5
 
 const CACHE_KEY = 'bars_cache'
 const CACHE_DURATION_MS = 1000 * 60 * 60 // 1 hour
+
+// Calculate bounding box from center point and radius
+function calculateBbox(center: UserLocation, radiusKm: number) {
+  // Approximate degrees per km at this latitude
+  const latDegPerKm = 1 / 111 // ~111km per degree latitude
+  const lngDegPerKm = 1 / (111 * Math.cos((center.lat * Math.PI) / 180))
+  
+  const latOffset = radiusKm * latDegPerKm
+  const lngOffset = radiusKm * lngDegPerKm
+  
+  return {
+    south: center.lat - latOffset,
+    north: center.lat + latOffset,
+    west: center.lng - lngOffset,
+    east: center.lng + lngOffset,
+  }
+}
 
 interface CacheData {
   bars: Bar[]
   timestamp: number
 }
 
-function getCache(): CacheData | null {
+function getCache(cacheKey: string): CacheData | null {
   try {
-    const cached = sessionStorage.getItem(CACHE_KEY)
+    const cached = sessionStorage.getItem(cacheKey)
     if (!cached) return null
     const data: CacheData = JSON.parse(cached)
     if (Date.now() - data.timestamp > CACHE_DURATION_MS) {
-      sessionStorage.removeItem(CACHE_KEY)
+      sessionStorage.removeItem(cacheKey)
       return null
     }
     return data
@@ -43,10 +66,10 @@ function getCache(): CacheData | null {
   }
 }
 
-function setCache(bars: Bar[]) {
+function setCache(cacheKey: string, bars: Bar[]) {
   try {
     const data: CacheData = { bars, timestamp: Date.now() }
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify(data))
+    sessionStorage.setItem(cacheKey, JSON.stringify(data))
   } catch {
     // Ignore storage errors
   }
@@ -92,14 +115,25 @@ function mapAmenityToType(amenity: string): Bar['type'] {
   }
 }
 
-export function useBars() {
+interface UseBarsOptions {
+  userLocation?: UserLocation | null
+  radiusKm?: number
+}
+
+export function useBars(options: UseBarsOptions = {}) {
+  const { userLocation, radiusKm = DEFAULT_RADIUS_KM } = options
+  
   const [bars, setBars] = useState<Bar[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const fetchBars = useCallback(async () => {
+    // Create cache key based on location and radius
+    const center = userLocation ?? GOTHENBURG_CENTER
+    const cacheKey = `${CACHE_KEY}_${center.lat.toFixed(2)}_${center.lng.toFixed(2)}_${radiusKm}`
+    
     // Check cache first
-    const cached = getCache()
+    const cached = getCache(cacheKey)
     if (cached) {
       setBars(cached.bars)
       setLoading(false)
@@ -109,9 +143,11 @@ export function useBars() {
     setLoading(true)
     setError(null)
 
-    // Overpass QL query for bars, pubs, nightclubs, biergartens in Gothenburg
-    // Using a more compact query with regex and longer timeout
-    const bbox = `${GOTHENBURG_BBOX.south},${GOTHENBURG_BBOX.west},${GOTHENBURG_BBOX.north},${GOTHENBURG_BBOX.east}`
+    // Calculate bounding box based on user location and radius
+    const bboxCoords = calculateBbox(center, radiusKm)
+    const bbox = `${bboxCoords.south},${bboxCoords.west},${bboxCoords.north},${bboxCoords.east}`
+    
+    // Overpass QL query for bars, pubs, nightclubs, biergartens
     const query = `
       [out:json][timeout:90];
       nwr["amenity"~"^(bar|pub|nightclub|biergarten)$"](${bbox});
@@ -176,7 +212,7 @@ export function useBars() {
           })
 
         setBars(fetchedBars)
-        setCache(fetchedBars)
+        setCache(cacheKey, fetchedBars)
         setLoading(false)
         return // Success, exit early
       } catch (err) {
@@ -189,7 +225,7 @@ export function useBars() {
     // All endpoints failed
     setError(lastError?.message || 'Kunde inte ansluta till OpenStreetMap')
     setLoading(false)
-  }, [])
+  }, [userLocation, radiusKm])
 
   useEffect(() => {
     fetchBars()

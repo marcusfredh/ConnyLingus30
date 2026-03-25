@@ -8,8 +8,11 @@ import type { Bar } from '../context/useBars'
 import { useBarVotes } from '../context/useBarVotes'
 import { useBarVisits } from '../context/useBarVisits'
 import { useGoogleRatings } from '../context/useGoogleRatings'
+import { useSearchRadius } from '../context/useSearchRadius'
+import { usePaginatedBars } from '../context/usePaginatedBars'
 import type { PlaceRating } from '../context/useGoogleRatings'
 import { BarDetailSheet } from '../components/BarDetailSheet'
+import { RadiusSelector } from '../components/RadiusSelector'
 
 // Fix Leaflet default marker icon issue
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
@@ -220,7 +223,7 @@ function BarListItem({
 
 export function BarsPage() {
   const navigate = useNavigate()
-  const { bars, loading, error } = useBars()
+  const { radiusKm } = useSearchRadius()
   const { getVoteCount, hasUserVoted, toggleVote } = useBarVotes()
   const { hasVisited, toggleVisited, visitedCount } = useBarVisits()
   const { getRating, isLoading: isRatingLoading, fetchRatingsForBars } = useGoogleRatings()
@@ -251,6 +254,12 @@ export function BarsPage() {
       { enableHighAccuracy: true, timeout: 10000 }
     )
   }, [])
+
+  // Fetch bars based on user location and radius
+  const { bars, loading, error } = useBars({ 
+    userLocation, 
+    radiusKm 
+  })
 
   // Fetch Google ratings for visible bars (first 20)
   useEffect(() => {
@@ -313,6 +322,15 @@ export function BarsPage() {
       }
     })
   }, [bars, userLocation, getVoteCount, getRating, sortBy])
+
+  // Apply pagination to sorted bars
+  const { 
+    items: paginatedBars, 
+    hasMore, 
+    loadMore, 
+    totalCount, 
+    loadedCount 
+  } = usePaginatedBars(sortedBars, 20)
 
   const handleToggleVote = async () => {
     if (selectedBar) {
@@ -431,6 +449,9 @@ export function BarsPage() {
             </div>
           </div>
         )}
+
+        {/* Radius selector */}
+        <RadiusSelector className="bg-gray-800 rounded-xl px-3 py-2" />
       </div>
 
       {/* Content */}
@@ -446,25 +467,44 @@ export function BarsPage() {
           </div>
         ) : viewMode === 'list' ? (
           <div className="flex-1 px-4 pb-4 space-y-2 overflow-y-auto">
-            {sortedBars.length === 0 ? (
+            {/* Pagination info */}
+            {totalCount > 0 && (
+              <p className="text-xs text-gray-500 text-center py-1">
+                Visar {loadedCount} av {totalCount} barer
+              </p>
+            )}
+            
+            {paginatedBars.length === 0 ? (
               <div className="flex flex-col items-center justify-center pt-24 gap-3 text-gray-600">
                 <span className="text-4xl">🍺</span>
-                <p className="text-sm">Inga barer hittades</p>
+                <p className="text-sm">Inga barer hittades inom {radiusKm} km</p>
               </div>
             ) : (
-              sortedBars.map(({ bar, distance }) => (
-                <BarListItem
-                  key={bar.id}
-                  bar={bar}
-                  distance={distance}
-                  voteCount={getVoteCount(bar.id)}
-                  hasVoted={hasUserVoted(bar.id)}
-                  hasVisited={hasVisited(bar.id)}
-                  rating={getRating(bar.id)}
-                  ratingLoading={isRatingLoading(bar.id)}
-                  onClick={() => setSelectedBar(bar)}
-                />
-              ))
+              <>
+                {paginatedBars.map(({ bar, distance }) => (
+                  <BarListItem
+                    key={bar.id}
+                    bar={bar}
+                    distance={distance}
+                    voteCount={getVoteCount(bar.id)}
+                    hasVoted={hasUserVoted(bar.id)}
+                    hasVisited={hasVisited(bar.id)}
+                    rating={getRating(bar.id)}
+                    ratingLoading={isRatingLoading(bar.id)}
+                    onClick={() => setSelectedBar(bar)}
+                  />
+                ))}
+                
+                {/* Load more button */}
+                {hasMore && (
+                  <button
+                    onClick={loadMore}
+                    className="w-full py-3 text-sm font-medium text-indigo-400 bg-gray-800 rounded-xl border border-gray-700 hover:bg-gray-700 active:bg-gray-600 transition"
+                  >
+                    Ladda fler barer ({totalCount - loadedCount} kvar)
+                  </button>
+                )}
+              </>
             )}
           </div>
         ) : (
