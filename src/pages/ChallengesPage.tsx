@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
+import { useProfiles } from '../context/useProfiles'
 
 interface Challenge {
   id: number
@@ -24,12 +25,14 @@ interface Profile {
 export function ChallengesPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
+  const { nameOf } = useProfiles()
 
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [completions, setCompletions] = useState<Completion[]>([])
   const [myTeamId, setMyTeamId] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [completing, setCompleting] = useState<number | null>(null)
+  const [undoing, setUndoing] = useState<number | null>(null)
 
   useEffect(() => {
     if (!session) return
@@ -85,6 +88,37 @@ export function ChallengesPage() {
     }
 
     setCompleting(null)
+  }
+
+  const handleUndo = async (challenge: Challenge) => {
+    if (!session) return
+    setUndoing(challenge.id)
+
+    const comp =
+      completions.find((c) => c.challenge_id === challenge.id && c.completed_by === session.user.id) ??
+      completions.find((c) => c.challenge_id === challenge.id && (myTeamId != null ? c.team_id === myTeamId : c.team_id == null))
+
+    if (comp) {
+      const { error } = await supabase.from('challenge_completions').delete().eq('id', comp.id)
+      if (!error) {
+        // Hämta exakt en matchande point_event-rad och ta bort enbart den
+        const { data: evtRows } = await supabase
+          .from('point_events')
+          .select('id')
+          .eq('user_id', comp.completed_by)
+          .eq('type', 'challenge_complete')
+          .filter('metadata->>challenge_id', 'eq', String(challenge.id))
+          .limit(1)
+
+        if (evtRows && evtRows.length > 0) {
+          await supabase.from('point_events').delete().eq('id', evtRows[0].id)
+        }
+
+        setCompletions((prev) => prev.filter((c) => c.id !== comp.id))
+      }
+    }
+
+    setUndoing(null)
   }
 
   if (loading) {
@@ -185,27 +219,49 @@ export function ChallengesPage() {
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-1">
               Klara · {done.length}
             </h2>
-            {done.map((c) => (
-              <div
-                key={c.id}
-                className="bg-gray-800/50 border border-gray-700/50 rounded-2xl px-4 py-4 flex items-start gap-4 opacity-70"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-300 leading-snug line-through decoration-gray-600">{c.text}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-xs font-semibold text-green-400 bg-green-900/40 px-2 py-0.5 rounded-full">
-                      +{c.points} p
-                    </span>
-                    <span className="text-xs text-gray-500">Avklarad</span>
+            {done.map((c) => {
+              const comp = completions.find((co) =>
+                co.challenge_id === c.id &&
+                (myTeamId != null ? co.team_id === myTeamId : co.completed_by === session?.user.id)
+              )
+              const completedByName = comp ? nameOf(comp.completed_by) : null
+
+              return (
+                <div
+                  key={c.id}
+                  className="bg-gray-800/50 border border-gray-700/50 rounded-2xl px-4 py-4 flex items-start gap-3"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-300 leading-snug line-through decoration-gray-600">{c.text}</p>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className="text-xs font-semibold text-green-400 bg-green-900/40 px-2 py-0.5 rounded-full">
+                        +{c.points} p
+                      </span>
+                      {completedByName && (
+                        <span className="text-xs text-gray-500">av {completedByName}</span>
+                      )}
+                    </div>
                   </div>
+                  <button
+                    onClick={() => handleUndo(c)}
+                    disabled={undoing === c.id}
+                    className="flex-shrink-0 w-8 h-8 rounded-full bg-green-900/50 border border-green-700/50 flex items-center justify-center active:bg-red-900/50 active:border-red-700/50 disabled:opacity-40 transition"
+                    aria-label="Ångra"
+                  >
+                    {undoing === c.id ? (
+                      <svg className="w-4 h-4 animate-spin text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
                 </div>
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-900/50 border border-green-700/50 flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </section>
         )}
 

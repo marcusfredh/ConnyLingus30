@@ -75,6 +75,16 @@ export function usePoints() {
           return updated
         })
       })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'point_events' }, async (payload) => {
+        const deletedId = (payload.old as { id: string }).id
+        setEvents((prev) => {
+          const updated = prev.filter((e) => e.id !== deletedId)
+          const ut = computeUserTotals(updated)
+          setUserTotals(ut)
+          computeTeamTotals(ut).then(setTeamTotals)
+          return updated
+        })
+      })
       // Recompute team totals if team assignments change
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, async () => {
         setUserTotals((ut) => {
