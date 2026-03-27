@@ -5,6 +5,32 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Martin 30 år!</title>
+    <script>
+      // GitHub Pages SPA redirect decoder
+      // Restores the original URL from the ?p= query param set by 404.html
+      (function() {
+        var redirect = sessionStorage.redirect;
+        delete sessionStorage.redirect;
+        if (redirect && redirect !== location.href) {
+          history.replaceState(null, null, redirect);
+          return;
+        }
+        var search = location.search;
+        if (search) {
+          var p = search.slice(1).split('&').reduce(function(a, s) {
+            var pair = s.split('=');
+            if (pair[0] === 'p') a.path = '/' + pair[1].replace(/~and~/g, '&');
+            if (pair[0] === 'q') a.query = '?' + pair[1].replace(/~and~/g, '&');
+            return a;
+          }, { path: null, query: null });
+          if (p.path) {
+            history.replaceState(null, null,
+              p.path + (p.query || '') + location.hash
+            );
+          }
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
